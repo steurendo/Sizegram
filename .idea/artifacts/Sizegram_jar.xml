@@ -1,0 +1,8 @@
+<component name="ArtifactManager">
+  <artifact type="jar" name="Sizegram:jar">
+    <output-path>$PROJECT_DIR$/out/artifacts/Sizegram_jar</output-path>
+    <root id="archive" name="Sizegram.jar">
+      <element id="module-output" name="Sizegram" />
+    </root>
+  </artifact>
+</component>
