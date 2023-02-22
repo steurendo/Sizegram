@@ -2,106 +2,130 @@ import javax.imageio.ImageIO;
 import java.awt.*;
 import java.awt.image.BufferedImage;
 import java.io.File;
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 
 public class Model {
-    public static String[] ALLOWED_EXTENSIONS = {"png", "jpg", "gif"};
+    public static String[] ALLOWED_EXTENSIONS = { "png", "jpg", "gif" };
+    private static final float RATIO_IG_HORIZONTAL = 5f / 4;
+    private static final float RATIO_IG_VERTICAL = 4f / 5;
+    private final View view;
+    private File workingDirectory;
+    private List<PictureItem> pictureItems;
+    private int selectedItem;
+    private OutputRatio outputRatio;
+    private boolean usingCustomRatio;
 
-    private ModelConstants state;
-    private List<File> images;
-    private boolean adjustHorizontal;
-
-    public Model(){
-        images = new ArrayList<File>().stream().toList();
-        adjustHorizontal = true;
-        state = ModelConstants.STATE_START;
-        images = null;
+    public Model(View view) {
+        this.view = view;
+        outputRatio = OutputRatio.HORIZONTAL;
+        usingCustomRatio = false;
+        workingDirectory = null;
+        pictureItems = null;
+        selectedItem = -1;
     }
 
-    public boolean isAdjustHorizontal() { return adjustHorizontal; }
-    public ModelConstants getState() { return state; }
-    public String getWorkingDirectoryPath(){
-        if (images.isEmpty())
+    public OutputRatio getOutputRatio() { return outputRatio; }
+    public void setOutputRatio(OutputRatio outputRatio) {
+        this.outputRatio = outputRatio;
+    }
+    public void toggleCustomRatio() {
+        usingCustomRatio = !usingCustomRatio;
+    }
+    public boolean isUsingCustomRatio() {
+        return usingCustomRatio;
+    }
+    public void setSelectedItem(int selectedItem) {
+        this.selectedItem = selectedItem;
+    }
+    public PictureItem getSelectedItem() {
+        if (selectedItem == -1)
+            return null;
+        return pictureItems.get(selectedItem);
+    }
+
+    public String getWorkingDirectoryPath() {
+        if (workingDirectory == null)
             return "";
 
-        return images.get(0).getParentFile().getAbsolutePath();
+        return workingDirectory.getAbsolutePath();
     }
-    public void setAdjustHorizontal(boolean adjustHorizontal) { this.adjustHorizontal = adjustHorizontal; }
 
-    public ModelConstants obtainFilesFromDirectory(File directory){
+    public ModelMessage loadFilesInFolder(File folder) {
         File[] files;
 
-        if (!directory.isDirectory())
-            return ModelConstants.ERR_NOT_A_DIRECTORY;
-        files = directory.listFiles();
+        files = folder.listFiles();
         if (files == null)
-            return ModelConstants.RET_EMPTY_DIRECTORY;
-        images = Arrays.stream(files)
+            return ModelMessage.ERR_NOT_A_DIRECTORY;
+        pictureItems = Arrays.stream(files)
                 .filter(f -> !f.isDirectory())
                 .filter(f -> isEndWith(f.getName().toLowerCase(), ALLOWED_EXTENSIONS))
+                .map(PictureItem::new)
                 .toList();
-        if (images.isEmpty()){
-            state = ModelConstants.STATE_START;
-            return ModelConstants.RET_EMPTY_DIRECTORY;
-        }
+        if (pictureItems.isEmpty())
+            return ModelMessage.ERR_EMPTY_DIRECTORY;
 
-        state = ModelConstants.STATE_READY;
-        if (images.size() > 10)
-            return ModelConstants.WRN_COUNT_EXCEEDS;
+        workingDirectory = folder;
+        if (pictureItems.size() > 10)
+            return ModelMessage.WRN_COUNT_EXCEEDS;
 
-        return ModelConstants.RET_GOOD;
+        return ModelMessage.RET_GOOD;
     }
+    public void adjustRatio() {
+        int prog, count, percent;
+        BufferedImage img, out;
+        float ratio, outRatio;
+        int expectedW, expectedH, addW, addH;
+        Graphics g2d;
 
-    public ModelConstants adjustAspectRatio(){
-        images.forEach(e -> {
-            System.out.println(e.getAbsolutePath());
-            BufferedImage img, out;
-            int n, d, expectedW, expectedH, addW, addH, x, y;
-            Graphics g2d;
-
-            n = adjustHorizontal ? 4 : 5;
-            d = adjustHorizontal ? 5 : 4;
+        prog = 0;
+        count = pictureItems.size();
+        if (usingCustomRatio) {
+            PictureItem selectedPicture = pictureItems.get(selectedItem);
+            outRatio = ((float) selectedPicture.getWidth()) / selectedPicture.getHeight();
+        }
+        else if (outputRatio == OutputRatio.HORIZONTAL)
+            outRatio = RATIO_IG_HORIZONTAL;
+        else
+            outRatio = RATIO_IG_VERTICAL;
+        for (PictureItem picture : pictureItems) {
             try {
-                img = ImageIO.read(e);
-                expectedW = d * img.getHeight() / n;
-                expectedH = n * img.getWidth() / d;
-                if (expectedH > img.getHeight()) { //AGGIUNGO PIXEL IN ALTEZZA
+                img = ImageIO.read(picture.getFile());
+                ratio = ((float) img.getWidth()) / img.getHeight();
+                if (ratio > outRatio) { //AGGIUNGO PIXEL IN ALTEZZA
+                    expectedW = img.getWidth();
+                    expectedH = (int) (expectedW / outRatio);
                     addW = 0;
                     addH = (expectedH - img.getHeight()) / 2;
-                    expectedW = img.getWidth();
-                    expectedH = 2 * addH + img.getHeight();
-                }
-                else {                             //AGGIUNGO PIXEL IN LUNGHEZZA
-                    addW = (expectedW - img.getWidth()) / 2;
-                    addH = 0;
-                    expectedW = 2 * addW + img.getWidth();
+                } else {                             //AGGIUNGO PIXEL IN LUNGHEZZA
                     expectedH = img.getHeight();
+                    expectedW = (int) (expectedH * outRatio);
+                    addH = 0;
+                    addW = (expectedW - img.getWidth()) / 2;
                 }
                 out = new BufferedImage(expectedW, expectedH, BufferedImage.TYPE_INT_RGB);
                 g2d = out.createGraphics();
                 g2d.setColor(new Color(0xFFFFFFFF));
                 g2d.fillRect(0, 0, expectedW, expectedH);
                 g2d.drawImage(img, addW, addH, null);
-                ImageIO.write(out, "jpg", e);
-            } catch (Exception ex){ throw new RuntimeException(ex); }
-        });
-        images = new ArrayList<File>().stream().toList();
-
-        state = ModelConstants.STATE_START;
-        return ModelConstants.RET_GOOD;
-    }
-    public ImgFileInfo getImgInfo(int index){
-        return new ImgFileInfo(images.get(index));
-    }
-    public List<ImgFileInfo> getAllImgsInfo(){
-        return images.stream()
-                .map(ImgFileInfo::new)
-                .toList();
+                ImageIO.write(out, "jpg", picture.getFile());
+                prog++;
+                percent = (int)(100 * ((float)prog) / count);
+                view.notifyProgress(percent);
+            } catch (Exception ex) {
+                throw new RuntimeException(ex);
+            }
+        }
+        pictureItems = null;
+        selectedItem = -1;
+        view.notifyProgress(-1);
     }
 
-    private static boolean isEndWith(String file, String[] fileExtensions){
+    public List<PictureItem> getPictureItems() {
+        return pictureItems;
+    }
+
+    private static boolean isEndWith(String file, String[] fileExtensions) {
         for (String fileExtension : fileExtensions) {
             if (file.endsWith(fileExtension)) {
                 return true;
@@ -109,13 +133,14 @@ public class Model {
         }
         return false;
     }
-    public void printState(){
-        System.out.printf("Current state: %s\nAdjust set to %s\n", state.toString(), (adjustHorizontal ? "horizontal" : "vertical"));
-        if (images.isEmpty())
+
+    public void printState() {
+        System.out.printf("Adjust set to %s\n", outputRatio);
+        if (pictureItems.isEmpty())
             System.out.println("No folder selected\n");
         else {
             System.out.println("Selected folder: " + getWorkingDirectoryPath());
-            images.forEach(f -> System.out.println("\t-" + f.getName()));
+            pictureItems.forEach(f -> System.out.println("\t-" + f.getName()));
         }
     }
 }

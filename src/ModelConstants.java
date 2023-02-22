@@ -1,8 +1,0 @@
-public enum ModelConstants {
-    RET_GOOD,
-    RET_EMPTY_DIRECTORY,
-    WRN_COUNT_EXCEEDS,
-    ERR_NOT_A_DIRECTORY,
-    STATE_START,
-    STATE_READY
-}
