@@ -20,6 +20,7 @@ public class View extends JFrame implements ActionListener, ListSelectionListene
     private JList listPictures;
     private JButton buttonToggleCustomRatio;
     private JProgressBar progressAdjust;
+    private JPicture picturePreview;
     private ButtonGroup groupRadios;
 
     //APP
@@ -46,7 +47,7 @@ public class View extends JFrame implements ActionListener, ListSelectionListene
 
     public void start() {
         setTitle("Sizegram");
-        setSize(500, 450);
+        setSize(600, 450);
         setContentPane(mainPanel);
         setLocationRelativeTo(null);
         setDefaultCloseOperation(EXIT_ON_CLOSE);
@@ -93,10 +94,12 @@ public class View extends JFrame implements ActionListener, ListSelectionListene
     private void updateSelectedItemInfo() {
         PictureItem item = model.getSelectedItem();
         if (item == null) {
+            picturePreview.setPicture(null);
             labelWidth.setText("Width: -");
             labelHeight.setText("Height: -");
             labelFileSize.setText("File size: -");
         } else {
+            picturePreview.setPicture(model.getSelectedItem().getPicture());
             labelWidth.setText("Width: " + item.getWidth() + "px");
             labelHeight.setText("Height: " + item.getHeight() + "px");
             labelFileSize.setText("File size: " + (item.getSize() / 1024) + "KB");
@@ -154,7 +157,13 @@ public class View extends JFrame implements ActionListener, ListSelectionListene
         result = JOptionPane.showConfirmDialog(this, msg, "Sizegram", JOptionPane.YES_NO_OPTION);
         if (result == JOptionPane.YES_OPTION) {         //RESULT YES
             updateState(ModelState.SAVING);
-            model.adjustRatio();
+            new SwingWorker<>() {
+                @Override
+                protected Object doInBackground() {
+                    model.adjustRatio();
+                    return null;
+                }
+            }.execute();
         }
     }
 
