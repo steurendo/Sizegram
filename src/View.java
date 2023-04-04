@@ -25,7 +25,7 @@ public class View extends JFrame implements ActionListener, ListSelectionListene
 
     //APP
     private ModelState state;
-    private Model model;
+    private final Model model;
 
     public View() {
         super();
